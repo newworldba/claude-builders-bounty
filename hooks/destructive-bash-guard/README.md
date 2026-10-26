@@ -18,12 +18,14 @@ Restart Claude Code after installation so it loads the updated settings.
 
 ## Blocked Commands
 
-- `rm` when both recursive and force flags are present, including `rm -rf`, `rm -fr`, and `rm -r --force`.
+- `rm` when both recursive and force flags are present, including `sudo rm -rf`, `rm -fr`, and `rm -r --force`.
 - `git push --force` and `git push -f`.
 - `DROP TABLE` and `TRUNCATE` in a SQL client context.
 - `DELETE FROM` without a `WHERE` clause in a SQL client context.
 
 The guard only inspects Claude's `Bash` tool. Commands such as `echo 'DROP TABLE users'`, `grep 'DELETE FROM users'`, and `git push --force-with-lease` remain allowed because they do not perform the destructive operation.
+
+It also inspects the command string passed to `bash -c`, `sh -c`, and `zsh -c`.
 
 ## Hook Output
 

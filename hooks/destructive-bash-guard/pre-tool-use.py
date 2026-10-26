@@ -44,6 +44,20 @@ VIEWER_COMMANDS = {
     "history",
 }
 
+COMMAND_WRAPPERS = {
+    "command",
+    "env",
+    "nice",
+    "nohup",
+    "sudo",
+}
+
+SHELL_COMMANDS = {
+    "bash",
+    "sh",
+    "zsh",
+}
+
 
 def hook_output(decision: str, reason: str) -> str:
     return json.dumps(
@@ -108,21 +122,38 @@ def rm_flags(segment: list[str], start: int) -> tuple[bool, bool]:
 
 
 def find_rm_risk(segment: list[str]) -> str | None:
-    for index, token in enumerate(segment):
-        if token != "rm":
+    index = 0
+    while index < len(segment):
+        token = segment[index]
+        if token == "env" and index + 1 < len(segment) and "=" in segment[index + 1]:
+            index += 1
             continue
-        recursive, force = rm_flags(segment, index)
-        if recursive and force:
-            return "rm was called with both recursive and force flags"
+        if token not in COMMAND_WRAPPERS:
+            if token == "rm" or token.endswith("/rm"):
+                recursive, force = rm_flags(segment, index)
+                if recursive and force:
+                    return "rm was called with both recursive and force flags"
+            break
+        index += 1
     return None
 
 
 def find_git_push_force(segment: list[str]) -> str | None:
-    for index in range(len(segment) - 1):
-        if segment[index : index + 2] != ["git", "push"]:
+    index = 0
+    while index < len(segment) - 1:
+        if segment[index] != "git":
+            index += 1
             continue
+        position = index + 1
+        while position < len(segment) and segment[position].startswith("-"):
+            position += 1
+        if position >= len(segment):
+            return None
+        if segment[position] != "push":
+            return None
+
         reached_end_of_options = False
-        for token in segment[index + 2 :]:
+        for token in segment[position + 1 :]:
             if token in {";", "|", "||", "&&", "&", "\n"}:
                 break
             if reached_end_of_options or not token.startswith("-"):
@@ -132,6 +163,7 @@ def find_git_push_force(segment: list[str]) -> str | None:
                 continue
             if token == "--force" or token[1:] == "f":
                 return "git push would overwrite the remote branch with --force or -f"
+        return None
     return None
 
 
@@ -162,6 +194,11 @@ def segment_risk(segment: list[str]) -> str | None:
 
     if segment and segment[0] in VIEWER_COMMANDS:
         return None
+
+    if segment and segment[0] in SHELL_COMMANDS:
+        for index, token in enumerate(segment):
+            if token == "-c" and index + 1 < len(segment):
+                return inspect_command(segment[index + 1])
 
     command_text = " ".join(segment)
     has_sql_client = any(client in segment for client in SQL_CLIENTS)

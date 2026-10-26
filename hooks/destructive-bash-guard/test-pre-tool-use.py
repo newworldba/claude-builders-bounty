@@ -33,6 +33,7 @@ def invoke(command: str) -> tuple[int, str, str]:
         capture_output=True,
         env={"HOME": tempfile.mkdtemp(), "PATH": "/usr/bin:/bin"},
         check=False,
+        timeout=5,
     )
     return process.returncode, process.stdout, process.stderr
 
@@ -45,6 +46,7 @@ class DestructiveBashGuardTests(unittest.TestCase):
             "echo 'DROP TABLE users'",
             "grep -R 'DELETE FROM users' .",
             "echo 'rm -rf /tmp'",
+            "echo rm -rf /tmp",
             "psql -c 'DELETE FROM users WHERE id = 1'",
             "git push --force-with-lease origin main",
         ):
@@ -56,6 +58,7 @@ class DestructiveBashGuardTests(unittest.TestCase):
     def test_required_destructive_patterns_are_blocked(self) -> None:
         cases = {
             "rm -rf /tmp/example": "rm",
+            "sudo rm -rf /tmp/example": "rm",
             "rm -r --force /tmp/example": "rm",
             "rm -fr /tmp/example": "rm",
             "git push --force origin main": "git push",
@@ -64,6 +67,8 @@ class DestructiveBashGuardTests(unittest.TestCase):
             "mysql -e 'TRUNCATE users'": "TRUNCATE",
             "sqlite3 app.db 'DELETE FROM users'": "DELETE",
             "echo ready && psql -c 'DELETE FROM users'": "DELETE",
+            "bash -c 'rm -rf /tmp/example'": "rm",
+            "bash -c 'psql -c \"DELETE FROM users\"'": "DELETE",
         }
         for command, expected_text in cases.items():
             with self.subTest(command=command):
